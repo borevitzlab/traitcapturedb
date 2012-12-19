@@ -1,15 +1,19 @@
-from sqlalchemy import *
+from sqlalchemy import Column, String, ForeignKey, Float, DateTime, Text
+from sqlalchemy import Integer, Date, LargeBinary, UniqueConstraint
+from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship
 
 TableBase = declarative_base()
 
 # give all tables a primary key
 TableBase.id = Column(Integer, primary_key=True)
 
+
 class Accession(TableBase):
     __tablename__ = "accessions"
     accession_name = Column(String(255), nullable=False)
-    species_id = Column(Integer, ForeignKey('species.id'))
+    species_id = Column(Integer, ForeignKey('species.id'), nullable=False)
     anuid = Column(String(45), nullable=False, index=True, unique=True)
     population = Column(String(255))
     collector_id = Column(Integer, ForeignKey('users.id'), nullable=False)
@@ -33,8 +37,8 @@ class Accession(TableBase):
 class CollectionTrip(TableBase):
     __tablename__ = "collection_trips"
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
-    start_date = Column(Date, nullable = False)
-    end_date = Column(Date, nullable = False)
+    start_date = Column(Date, nullable=False)
+    end_date = Column(Date, nullable=False)
     location = Column(Text)
     notes = Column(Text, index=True)
     kml = Column(LargeBinary)
@@ -43,9 +47,10 @@ class CollectionTrip(TableBase):
 class Experiment(TableBase):
     __tablename__ = "experiments"
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
-    start_date = Column(Date, nullable = False)
-    end_date = Column(Date, nullable = False)
+    start_date = Column(Date, nullable=False)
+    end_date = Column(Date, nullable=False)
     notes = Column(Text, index=True)
+
 
 class Pedigree(TableBase):
     __tablename__ = "pedigrees"
@@ -81,43 +86,72 @@ class User(TableBase):
     phone = Column(String(45))
     organisation = Column(String(45))
 
+
 class Species(TableBase):
     __tablename__ = "species"
-    genus = Column(String(255))
-    species = Column(String(511))
-    family = Column(String(255))
-    abbreviation = Column(String(5))
+    genus = Column(String(255), nullable=False)
+    species = Column(String(511), nullable=False)
+    family = Column(String(255), nullable=False)
+    abbreviation = Column(String(5), nullable=False)
     __table_args__ = (
             UniqueConstraint("genus", "species"),
             )
 
+
 class Protocol(TableBase):
     __tablename__ = "protocols"
-    protocol_name = Column(String(45))
-    protocol = Column(Text, index=True, unique=True)
+    name = Column(String(45), nullable=False)
+    protocol = Column(Text, index=True, unique=True, nullable=False)
     machine_instructions = Column(LargeBinary)
 
 
-class ExperimentCondition(TableBase):  # NOT FINISHED
+class ExperimentCondition(TableBase):
     __tablename__ = "experiment_conditions"
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
     experiment_id = Column(Integer, ForeignKey('experiments.id'),
             nullable=False)
     notes = Column(Text, index=True)
+    protocols = relationship(
+            "ExperimentConditionProtocol",
+            order_by="asc(ExperimentConditionProtocol.ordinal",
+            primaryjoin="ExperimentConditionProtocol.experiment_condition_id \
+            == ExperimentCondition.id"
+            )
 
 
-class ExperimentConditionPreset(TableBase):  # NOT FINISHED
+class ExperimentConditionProtcol(TableBase):
+    __tablename__ = "experiment_condition_protocols"
+    experiment_condition_id = Column(Integer,
+            ForeignKey('experiment_conditions.id'), nullable=False)
+    ordinal = Column(Integer(3), nullable=False)
+    protcol_id = Column(Integer, ForeignKey('protocols.id'), nullable=False)
+    protcol_notes = Column(Text, index=True)
+
+
+class ExperimentConditionPreset(TableBase):
     __tablename__ = "experiment_condition_presets"
-    experiment_id = Column(Integer, ForeignKey('experiments.id'),
-            nullable=False)
+    name = Column(String(45), index=True, nullable=False)
+    description = Column(String(255), index=True)
     notes = Column(Text, index=True)
+    protocols = relationship(
+        "Protocol",
+        order_by="asc(ExperimentConditionPresetProtocol.order",
+        primaryjoin="ExperimentConditionPresetProtocol.\
+            experiment_condition _preset_id == ExperimentConditionPreset.id"
+        )
+
+
+class ExperimentConditionPresetProtcol(TableBase):
+    __tablename__ = "experiment_condition_preset_protocols"
+    experiment_condition_preset_id = Column(Integer,
+            ForeignKey('experiment_condition_presets.id'), nullable=False)
+    ordinal = Column(Integer(3), nullable=False)
+    protcol_id = Column(Integer, ForeignKey('protocols.id'), nullable=False)
 
 
 #file structure classes go here once we've decided
 # raw_data_items
 
-
-# create it
+# create tables in sqlite
 engine = create_engine("sqlite:///traitcapturedev.db")
 TableBase.metadata.create_all(engine)
-
