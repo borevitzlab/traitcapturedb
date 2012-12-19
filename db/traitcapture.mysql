@@ -11,13 +11,13 @@ USE `traitcapture`;
 -- -----------------------------------------------------
 CREATE  TABLE IF NOT EXISTS `traitcapture`.`collection_trips` (
   `id` INT UNSIGNED NOT NULL ,
-  `user_id` BIGINT UNSIGNED NOT NULL ,
+  `user_id` INT UNSIGNED NOT NULL ,
   `start_date` DATETIME NOT NULL ,
   `end_date` DATETIME NOT NULL ,
   `location` TEXT NOT NULL ,
   `notes` TEXT NULL ,
   `kml` LONGTEXT NULL ,
-  CONSTRAINT `fk_user_id`
+  CONSTRAINT `fk_user_id_collection_trips`
     FOREIGN KEY (`user_id` )
     REFERENCES `traitcapture`.`users` (`id` )
     ON DELETE NO ACTION
@@ -33,8 +33,10 @@ ENGINE = InnoDB;
 -- -----------------------------------------------------
 CREATE  TABLE IF NOT EXISTS `traitcapture`.`species` (
   `id` BIGINT UNSIGNED NOT NULL ,
-  `genus` VARCHAR(255) NOT NULL ,
-  `species` VARCHAR(1023) NOT NULL ,
+  -- colate these as latin1_bin so they take 1 byte per char, 
+  -- and fit into the index length limit of 767b
+  `genus` VARCHAR(255) COLLATE latin1_bin NOT NULL ,
+  `species` VARCHAR(511) COLLATE latin1_bin NOT NULL ,
   `family` VARCHAR(255) NULL ,
   `abreviation` VARCHAR(5) NOT NULL ,
   UNIQUE INDEX `abreviation_UNIQUE` (`abreviation` ASC) ,
@@ -70,17 +72,17 @@ CREATE  TABLE IF NOT EXISTS `traitcapture`.`accessions` (
   `country_origin` VARCHAR(45) NULL ,
   `habitat` TEXT NULL ,
   `notes` TEXT NULL ,
-  CONSTRAINT `fk_collector_id`
+  CONSTRAINT `fk_collector_id_accessions`
     FOREIGN KEY (`collector_id`)
     REFERENCES `traitcapture`.`users` (`id`)
     ON DELETE NO ACTION
     ON UPDATE NO ACTION ,
-  CONSTRAINT `fk_collection_trip_id`
+  CONSTRAINT `fk_collection_trip_id_accessions`
     FOREIGN KEY (`collection_trip_id`)
     REFERENCES `traitcapture`.`collection_trips` (`id`)
     ON DELETE NO ACTION
     ON UPDATE NO ACTION ,
-  CONSTRAINT `fk_species_id`
+  CONSTRAINT `fk_species_id_accessions`
     FOREIGN KEY (`species_id`)
     REFERENCES `traitcapture`.`species` (`id`)
     ON DELETE NO ACTION
@@ -92,7 +94,7 @@ CREATE  TABLE IF NOT EXISTS `traitcapture`.`accessions` (
   )
 ENGINE = InnoDB;
 
--- Fulltext index
+-- Fulltext index not supported on InnoDB until 5.6.4 ish, my server's running 5.1.5
 -- CREATE FULLTEXT INDEX `notes_FULLTEXT` ON `traitcapture`.`accessions` (`notes`);
 
 
@@ -103,22 +105,28 @@ CREATE  TABLE IF NOT EXISTS `traitcapture`.`plants` (
   `id` BIGINT UNSIGNED NOT NULL COMMENT 'A unique 5 digit alphnumeric for each plant' ,
   `accession_id` BIGINT UNSIGNED NOT NULL ,
   `experiment_id` BIGINT UNSIGNED NOT NULL ,
+  `user_id` INT UNSIGNED NOT NULL ,
   `tray_number` TINYINT UNSIGNED NOT NULL ,
   `tray_position` VARCHAR(3) NOT NULL ,
   `tray_chamber_position` VARCHAR(3) NULL ,
   `anuid` VARCHAR(45) NOT NULL COMMENT 'This is the ANU ID that is generated from the plant\'s unique number, spp type' ,
   `experiment_condition_id` BIGINT UNSIGNED NOT NULL ,
   UNIQUE INDEX `experiment_tray_position_UNIQUE` (`experiment_id`, `tray_number`, `tray_position`) ,
-  CONSTRAINT `fk_accession_id`
+  CONSTRAINT `fk_accession_id_plants`
     FOREIGN KEY (`accession_id` )
     REFERENCES `traitcapture`.`accessions` (`id` )
     ON DELETE NO ACTION
     ON UPDATE NO ACTION,
-  CONSTRAINT `fk_experiment_condition_id`
+  CONSTRAINT `fk_experiment_condition_id_plants`
     FOREIGN KEY (`experiment_condition_id` )
     REFERENCES `traitcapture`.`experiment_conditons` (`id` )
     ON DELETE NO ACTION
     ON UPDATE NO ACTION,
+  CONSTRAINT `fk_user_id_plants`
+    FOREIGN KEY (`user_id` )
+    REFERENCES `traitcapture`.`users` (`id` )
+    ON DELETE NO ACTION
+    ON UPDATE NO ACTION ,
   PRIMARY KEY (`id`) ,
   UNIQUE INDEX `id_UNIQUE` (`id` ASC)
   )
@@ -131,20 +139,26 @@ ENGINE = InnoDB;
 CREATE  TABLE IF NOT EXISTS `traitcapture`.`pedigrees` (
   `id` BIGINT UNSIGNED NOT NULL ,
   `accession_id` BIGINT UNSIGNED NOT NULL ,
+  `user_id` INT UNSIGNED NOT NULL ,
   `first_parent_id` BIGINT UNSIGNED NOT NULL ,
   `first_parent_gender` TINYINT UNSIGNED NOT NULL ,
   `second_parent_id` BIGINT UNSIGNED NOT NULL ,
   `second_parent_gender` TINYINT UNSIGNED NOT NULL ,
-  CONSTRAINT `fk_first_parent_id`
+  CONSTRAINT `fk_first_parent_id_pedigrees`
     FOREIGN KEY (`first_parent_id` )
     REFERENCES `traitcapture`.`plants` (`id` )
     ON DELETE NO ACTION
     ON UPDATE NO ACTION,
-  CONSTRAINT `fk_second_parent_id`
+  CONSTRAINT `fk_second_parent_id_pedigrees`
     FOREIGN KEY (`second_parent_id` )
     REFERENCES `traitcapture`.`plants` (`id` )
     ON DELETE NO ACTION
     ON UPDATE NO ACTION,
+  CONSTRAINT `fk_user_id_pedigrees`
+    FOREIGN KEY (`user_id` )
+    REFERENCES `traitcapture`.`users` (`id` )
+    ON DELETE NO ACTION
+    ON UPDATE NO ACTION ,
   PRIMARY KEY (`id`) ,
   UNIQUE INDEX `id_UNIQUE` (`id` ASC)
   )
@@ -188,7 +202,7 @@ CREATE  TABLE IF NOT EXISTS `traitcapture`.`experiment_conditions` (
 -- foreign keys referencing condtion protocols. full list to come
 -- actual conditions, one field per above
   `notes` TEXT NULL ,
-  CONSTRAINT `fk_experiment_id`
+  CONSTRAINT `fk_experiment_id_experiment_conditions`
     FOREIGN KEY (`experiment_id`)
     REFERENCES `traitcapture`.`experiments` (`id`)
     ON DELETE NO ACTION
@@ -217,10 +231,16 @@ ENGINE = InnoDB;
 -- -----------------------------------------------------
 CREATE  TABLE IF NOT EXISTS `traitcapture`.`raw_data_items` (
   `id` BIGINT UNSIGNED NOT NULL ,
+  `experiment_id` BIGINT UNSIGNED NOT NULL ,
   `file_structure_id` INT UNSIGNED NOT NULL ,
   `plant_id` BIGINT UNSIGNED NOT NULL ,
   `file_source_id` INT UNSIGNED NOT NULL ,
   `checksum` VARCHAR(64) NOT NULL ,
+  CONSTRAINT `fk_experiment_id_raw_data_items`
+    FOREIGN KEY (`experiment_id`)
+    REFERENCES `traitcapture`.`experiments` (`id`)
+    ON DELETE NO ACTION
+    ON UPDATE NO ACTION,
   PRIMARY KEY (`id`) ,
   UNIQUE INDEX `id_UNIQUE` (`id` ASC)
   )
@@ -263,7 +283,7 @@ CREATE  TABLE IF NOT EXISTS `traitcapture`.`users` (
   `email` VARCHAR(45) NOT NULL ,
   `phone` VARCHAR(31) NULL ,
   `organisation` VARCHAR(45) NOT NULL ,
-  UNIQUE INDEX `user_name_UNIQUE` (`user_name` ASC),
+  UNIQUE INDEX `user_name_UNIQUE` (`user_name` ASC) ,
   UNIQUE INDEX `email_UNIQUE` (`email` ASC) ,
   PRIMARY KEY (`id`) ,
   UNIQUE INDEX `id_UNIQUE` (`id` ASC)
