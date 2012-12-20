@@ -9,6 +9,14 @@ TableBase = declarative_base()
 # give all tables a primary key
 TableBase.id = Column(Integer, primary_key=True)
 
+def get_engine_str():
+    engine_fh = open("../bvzlab.passwd")
+    engine_string = engine_fh.read()
+    engine_fh.close()
+    return engine_string.strip()
+
+engine_string = get_engine_str()
+
 
 class Accession(TableBase):
     __tablename__ = "accessions"
@@ -31,7 +39,7 @@ class Accession(TableBase):
     generation = Column(String(4))
     country_origin = Column(String(45))
     habitat = Column(Text)
-    notes = Column(Text, index=True)
+    notes = Column(Text)
 
 
 class CollectionTrip(TableBase):
@@ -40,7 +48,7 @@ class CollectionTrip(TableBase):
     start_date = Column(Date, nullable=False)
     end_date = Column(Date, nullable=False)
     location = Column(Text)
-    notes = Column(Text, index=True)
+    notes = Column(Text)
     kml = Column(LargeBinary)
 
 
@@ -49,7 +57,7 @@ class Experiment(TableBase):
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
     start_date = Column(Date, nullable=False)
     end_date = Column(Date, nullable=False)
-    notes = Column(Text, index=True)
+    notes = Column(Text)
 
 
 class Pedigree(TableBase):
@@ -100,8 +108,8 @@ class Species(TableBase):
 
 class Protocol(TableBase):
     __tablename__ = "protocols"
-    name = Column(String(45), nullable=False)
-    protocol = Column(Text, index=True, unique=True, nullable=False)
+    name = Column(String(45), unique=True, nullable=False)
+    protocol = Column(Text, nullable=False)
     machine_instructions = Column(LargeBinary)
 
 
@@ -110,7 +118,7 @@ class ExperimentCondition(TableBase):
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
     experiment_id = Column(Integer, ForeignKey('experiments.id'),
             nullable=False)
-    notes = Column(Text, index=True)
+    notes = Column(Text)
     protocols = relationship(
             "ExperimentConditionProtocol",
             order_by="asc(ExperimentConditionProtocol.ordinal",
@@ -125,14 +133,14 @@ class ExperimentConditionProtcol(TableBase):
             ForeignKey('experiment_conditions.id'), nullable=False)
     ordinal = Column(Integer(3), nullable=False)
     protcol_id = Column(Integer, ForeignKey('protocols.id'), nullable=False)
-    protcol_notes = Column(Text, index=True)
+    protcol_notes = Column(Text)
 
 
 class ExperimentConditionPreset(TableBase):
     __tablename__ = "experiment_condition_presets"
     name = Column(String(45), index=True, nullable=False)
     description = Column(String(255), index=True)
-    notes = Column(Text, index=True)
+    notes = Column(Text)
     protocols = relationship(
         "Protocol",
         order_by="asc(ExperimentConditionPresetProtocol.order",
@@ -153,5 +161,5 @@ class ExperimentConditionPresetProtcol(TableBase):
 # raw_data_items
 
 # create tables in sqlite
-engine = create_engine("sqlite:///traitcapturedev.db")
+engine = create_engine("%s" % engine_string, echo=True)
 TableBase.metadata.create_all(engine)
