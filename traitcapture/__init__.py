@@ -10,12 +10,25 @@ TableBase = declarative_base()
 TableBase.id = Column(Integer, primary_key=True)
 
 def get_engine_str():
-    engine_fh = open("../bvzlab.passwd")
+    engine_fh = open("bvzlab.passwd")
     engine_string = engine_fh.read()
     engine_fh.close()
     return engine_string.strip()
 
-engine_string = get_engine_str()
+
+class MissingValueError(ValueError):
+    
+    def __init__(self, field, table):
+        message = "A value is required for field '%s' in table '%s'" % \
+                (field, table)
+        super(MissingValueError, self).__init__(message)
+
+class BadValueError(ValueError):
+    
+    def __init__(self, given_value, field, table):
+        message = "'%r' is an invalid value for '%s' in table '%s'" % \
+                (given_value, field, table)
+        super(BadValueError, self).__init__(message)
 
 
 class Accession(TableBase):
@@ -41,6 +54,17 @@ class Accession(TableBase):
     habitat = Column(Text)
     notes = Column(Text)
 
+    def __init__(self, accession_name=None, species_id=None, anuid=None,
+            population=None, collector_id=None, date_collected=None,
+            latitude=None, longitude=None, altitude=None, datum=None,
+            collection_trip_id=None, maternal_lines=None, box_name=None,
+            source=None, external_id=None, background=None, generation=None,
+            country_origin=None, habitat=None, notes=None):
+        if accession_name is None:
+            raise MissingValueError()
+
+    @validates(anuid)
+    def validate_anuid()
 
 class CollectionTrip(TableBase):
     __tablename__ = "collection_trips"
@@ -156,10 +180,17 @@ class ExperimentConditionPresetProtcol(TableBase):
     ordinal = Column(Integer(3), nullable=False)
     protcol_id = Column(Integer, ForeignKey('protocols.id'), nullable=False)
 
+# samples table
 
 #file structure classes go here once we've decided
 # raw_data_items
 
-# create tables in sqlite
-engine = create_engine("%s" % engine_string, echo=True)
-TableBase.metadata.create_all(engine)
+
+def main():
+    # create tables in sqlite
+    engine = create_engine("%s" % engine_string, echo=True)
+    TableBase.metadata.create_all(engine)
+    engine_string = get_engine_str()
+
+if __name__ == "__main__":
+    main()
