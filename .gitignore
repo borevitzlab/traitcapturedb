@@ -1,0 +1,4 @@
+*.db
+*.passwd
+*.pyc
+*.swp
