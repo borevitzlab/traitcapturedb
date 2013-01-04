@@ -3,18 +3,14 @@ from sqlalchemy import Integer, Date, LargeBinary, UniqueConstraint
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
+from sqlalchemy.orm import Session
 
 TableBase = declarative_base()
 
 # give all tables a primary key
 TableBase.id = Column(Integer, primary_key=True)
 
-def get_engine_str():
-    engine_fh = open("bvzlab.passwd")
-    engine_string = engine_fh.read()
-    engine_fh.close()
-    return engine_string.strip()
-
+ENGINE_STRING = "sqlite:///traitcapture.db"
 
 class MissingValueError(ValueError):
     
@@ -54,17 +50,16 @@ class Accession(TableBase):
     habitat = Column(Text)
     notes = Column(Text)
 
-    def __init__(self, accession_name=None, species_id=None, anuid=None,
-            population=None, collector_id=None, date_collected=None,
-            latitude=None, longitude=None, altitude=None, datum=None,
-            collection_trip_id=None, maternal_lines=None, box_name=None,
-            source=None, external_id=None, background=None, generation=None,
-            country_origin=None, habitat=None, notes=None):
-        if accession_name is None:
-            raise MissingValueError()
+    def __init__(self, **kwargs):
+        for field, value in kwargs:
+            getattr(self, field) = value
+        self.make_anuid()
 
-    @validates(anuid)
-    def validate_anuid()
+    def _make_anuid(self):
+        anuid = ""
+        
+        species = 
+
 
 class CollectionTrip(TableBase):
     __tablename__ = "collection_trips"
@@ -188,9 +183,8 @@ class ExperimentConditionPresetProtcol(TableBase):
 
 def main():
     # create tables in sqlite
-    engine = create_engine("%s" % engine_string, echo=True)
+    engine = create_engine(ENGINE_STRING, echo=True)
     TableBase.metadata.create_all(engine)
-    engine_string = get_engine_str()
 
 if __name__ == "__main__":
     main()
