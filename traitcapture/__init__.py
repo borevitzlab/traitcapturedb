@@ -2,15 +2,26 @@ from sqlalchemy import Column, String, ForeignKey, Float, DateTime, Text
 from sqlalchemy import Integer, Date, LargeBinary, UniqueConstraint
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import relationship, sessionmaker
+from datetime import datetime
 
+# Create Session class
+ENGINE = "sqlite:///traitcapture.db"
+engine = create_engine(ENGINE)
+Session = sessionmaker(bind=engine)
+
+
+# Setup base
 TableBase = declarative_base()
-
 # give all tables a primary key
 TableBase.id = Column(Integer, primary_key=True)
 
-ENGINE_STRING = "sqlite:///traitcapture.db"
+
+def _validate_kwargs(kwargs, validation):
+    for key, value in kwargs.iteritems():
+        if not validation[key](value):
+            raise ValueError("Bad value for %s: %r." % (key, value))
+
 
 class MissingValueError(ValueError):
     
@@ -18,6 +29,7 @@ class MissingValueError(ValueError):
         message = "A value is required for field '%s' in table '%s'" % \
                 (field, table)
         super(MissingValueError, self).__init__(message)
+
 
 class BadValueError(ValueError):
     
@@ -35,12 +47,12 @@ class Accession(TableBase):
     population = Column(String(255))
     collector_id = Column(Integer, ForeignKey('users.id'), nullable=False)
     date_collected = Column(DateTime, nullable=False)
-    latitude = Column(Float, nullable=False)
-    longitude = Column(Float, nullable=False)
+    latitude = Column(Float)
+    longitude = Column(Float)
     alitude = Column(Float)
-    datum = Column(String(10), nullable=False)
+    datum = Column(String(10))
     collection_trip_id = Column(Integer, ForeignKey('collection_trips.id'))
-    maternal_lines = Column(Integer(2), nullable=False)
+    maternal_lines = Column(Integer(2))
     box_name = Column(String(255))
     source = Column(Text)
     external_id = Column(String(45))
@@ -49,16 +61,39 @@ class Accession(TableBase):
     country_origin = Column(String(45))
     habitat = Column(Text)
     notes = Column(Text)
+    
+    validation = {
+            "accession_name": lambda v: v is not None and isinstance(v, str),
+            "species_id": lambda v: isinstance(v, int),
+            "anuid": lambda v: v is None,
+            }
 
     def __init__(self, **kwargs):
-        for field, value in kwargs:
-            getattr(self, field) = value
-        self.make_anuid()
+        
+        for key, value in kwargs.iteritems():
+            self.__setattr__(key, value)
+        self.session = Session()
+        self._make_anuid()
 
     def _make_anuid(self):
+        todays_accessions = self.session.query(Accession.id).\
+                filter(Accession.collector_id == self.collector_id,
+                Accession.date_collected == self.date_collected,
+                Accession.species_id == self.species_id).all()
+        accession_counter = len(todays_accessions) + 1
+
+        species_abbrev = self.session.query(Species.abbreviation).\
+                filter(Species.id == self.species_id).scalar()
+
         anuid = ""
-        
-        species = 
+        anuid += species_abbrev
+        anuid += "_" 
+        anuid += str(self.date_collected.year)[:2]
+        anuid += str(self.date_collected.month)[:2]
+        anuid += str(self.date_collected.day)[:2]
+        anuid += "_"
+        anuid += str(accession_counter)
+        self.anuid = anuid
 
 
 class CollectionTrip(TableBase):
@@ -113,6 +148,10 @@ class User(TableBase):
     phone = Column(String(45))
     organisation = Column(String(45))
 
+    def __init__(self, **kwargs):
+        for key, value in kwargs.iteritems():
+            self.__setattr__(key, value)
+
 
 class Species(TableBase):
     __tablename__ = "species"
@@ -123,6 +162,10 @@ class Species(TableBase):
     __table_args__ = (
             UniqueConstraint("genus", "species"),
             )
+
+    def __init__(self, **kwargs):
+        for key, value in kwargs.iteritems():
+            self.__setattr__(key, value)
 
 
 class Protocol(TableBase):
@@ -138,12 +181,6 @@ class ExperimentCondition(TableBase):
     experiment_id = Column(Integer, ForeignKey('experiments.id'),
             nullable=False)
     notes = Column(Text)
-    protocols = relationship(
-            "ExperimentConditionProtocol",
-            order_by="asc(ExperimentConditionProtocol.ordinal",
-            primaryjoin="ExperimentConditionProtocol.experiment_condition_id \
-            == ExperimentCondition.id"
-            )
 
 
 class ExperimentConditionProtcol(TableBase):
@@ -160,13 +197,6 @@ class ExperimentConditionPreset(TableBase):
     name = Column(String(45), index=True, nullable=False)
     description = Column(String(255), index=True)
     notes = Column(Text)
-    protocols = relationship(
-        "Protocol",
-        order_by="asc(ExperimentConditionPresetProtocol.order",
-        primaryjoin="ExperimentConditionPresetProtocol.\
-            experiment_condition _preset_id == ExperimentConditionPreset.id"
-        )
-
 
 class ExperimentConditionPresetProtcol(TableBase):
     __tablename__ = "experiment_condition_preset_protocols"
@@ -181,10 +211,30 @@ class ExperimentConditionPresetProtcol(TableBase):
 # raw_data_items
 
 
+### RELATIONSHIPS
+
+#ExperimentCondition.protocolis = relationship(
+#        "ExperimentConditionProtocol",
+#        order_by="asc(ExperimentConditionProtocol.ordinal)",
+#        primaryjoin="ExperimentConditionProtocol.experiment_condition_id \
+#        == ExperimentCondition.id"
+#        )
+
+#ExperimentConditionPreset.protocols = relationship(
+#    "Protocol",
+#    order_by="asc(ExperimentConditionPresetProtocol.order)",
+#    primaryjoin="ExperimentConditionPresetProtocol.\
+#        experiment_condition _preset_id == ExperimentConditionPreset.id"
+#    )
+
+
+
+
 def main():
     # create tables in sqlite
-    engine = create_engine(ENGINE_STRING, echo=True)
+    engine = create_engine(ENGINE, echo=False)
     TableBase.metadata.create_all(engine)
+    return True
 
 if __name__ == "__main__":
     main()
