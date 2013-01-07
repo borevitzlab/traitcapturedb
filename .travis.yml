@@ -6,7 +6,7 @@ python:
  - "pypy"
 
 install:
- - "python --version"
+ - "pip install sqlalchemy"
 
 script:
  - "export PYTHONPATH=`pwd`"
