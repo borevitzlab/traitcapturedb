@@ -10,7 +10,6 @@ ENGINE = "sqlite:///traitcapture.db"
 engine = create_engine(ENGINE)
 Session = sessionmaker(bind=engine)
 
-
 # Setup base
 TableBase = declarative_base()
 # give all tables a primary key
@@ -76,15 +75,13 @@ class Accession(TableBase):
         self._make_anuid()
 
     def _make_anuid(self):
-        todays_accessions = self.session.query(Accession.id).\
+        species_abbrev = self.session.query(Species.abbreviation).\
+               filter(Species.id == self.species_id).one()[0]
+        previous_accessions = self.session.query(Accession.id).\
                 filter(Accession.collector_id == self.collector_id,
                 Accession.date_collected == self.date_collected,
                 Accession.species_id == self.species_id).all()
-        accession_counter = len(todays_accessions) + 1
-
-        species_abbrev = self.session.query(Species.abbreviation).\
-                filter(Species.id == self.species_id).scalar()
-
+        accession_counter = len(previous_accessions) + 1
         anuid = ""
         anuid += species_abbrev
         anuid += "_" 
