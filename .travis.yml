@@ -1,0 +1,15 @@
+
+language: python
+python:
+ - "2.6"
+ - "2.7"
+ - "pypy"
+
+install:
+ - "python --version"
+
+script:
+ - "export PYTHONPATH=`pwd`"
+ - "for test in Tests/test_*.py; do python $test || exit 1; done"
+
+
