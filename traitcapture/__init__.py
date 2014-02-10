@@ -3,6 +3,11 @@ from sqlalchemy import Integer, Date, LargeBinary, UniqueConstraint
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
+from sqlalchemy.orm.exc import (
+        MultipleResultsFound,
+        NoResultFound,
+        )
+from sqlalchemy.exc import *  # sorry, but fuck writing all these out
 from datetime import datetime
 
 # Create Session class
@@ -22,22 +27,6 @@ def _validate_kwargs(kwargs, validation):
             raise ValueError("Bad value for %s: %r." % (key, value))
 
 
-class MissingValueError(ValueError):
-    
-    def __init__(self, field, table):
-        message = "A value is required for field '%s' in table '%s'" % \
-                (field, table)
-        super(MissingValueError, self).__init__(message)
-
-
-class BadValueError(ValueError):
-    
-    def __init__(self, given_value, field, table):
-        message = "'%r' is an invalid value for '%s' in table '%s'" % \
-                (given_value, field, table)
-        super(BadValueError, self).__init__(message)
-
-
 class Accession(TableBase):
     __tablename__ = "accessions"
     accession_name = Column(String(255), nullable=False)
@@ -49,9 +38,9 @@ class Accession(TableBase):
     latitude = Column(Float)
     longitude = Column(Float)
     alitude = Column(Float)
-    datum = Column(String(10))
+    datum = Column(String(10))  # TODO: this needs to be an enum
     collection_trip_id = Column(Integer, ForeignKey('collection_trips.id'))
-    maternal_lines = Column(Integer(2))
+    maternal_lines = Column(Integer())
     box_name = Column(String(255))
     source = Column(Text)
     external_id = Column(String(45))
@@ -60,7 +49,7 @@ class Accession(TableBase):
     country_origin = Column(String(45))
     habitat = Column(Text)
     notes = Column(Text)
-    
+
     validation = {
             "accession_name": lambda v: v is not None and isinstance(v, str),
             "species_id": lambda v: isinstance(v, int),
@@ -68,28 +57,31 @@ class Accession(TableBase):
             }
 
     def __init__(self, **kwargs):
-        
         for key, value in kwargs.iteritems():
             self.__setattr__(key, value)
         self.session = Session()
         self._make_anuid()
 
     def _make_anuid(self):
-        species_abbrev = self.session.query(Species.abbreviation).\
-               filter(Species.id == self.species_id).one()[0]
+        try:
+            species_abbrev = self.session.query(Species.abbreviation).\
+                   filter(Species.id == self.species_id).one()[0]
+        except:
+            raise NoResultFound()
         previous_accessions = self.session.query(Accession.id).\
                 filter(Accession.collector_id == self.collector_id,
                 Accession.date_collected == self.date_collected,
                 Accession.species_id == self.species_id).all()
         accession_counter = len(previous_accessions) + 1
-        anuid = ""
-        anuid += species_abbrev
-        anuid += "_" 
-        anuid += str(self.date_collected.year)[:2]
-        anuid += str(self.date_collected.month)[:2]
-        anuid += str(self.date_collected.day)[:2]
-        anuid += "_"
-        anuid += str(accession_counter)
+        anuid = "".join([
+            species_abbrev,
+            "_",
+            str(self.date_collected.year)[:2],
+            str(self.date_collected.month)[:2],
+            str(self.date_collected.day)[:2],
+            "_",
+            str(accession_counter),
+            ])
         self.anuid = anuid
 
 
@@ -113,13 +105,14 @@ class Experiment(TableBase):
 
 class Pedigree(TableBase):
     __tablename__ = "pedigrees"
+    accession_id = Column(Integer, ForeignKey('accessions.id'), nullable=False)
     experiment_id = Column(Integer, ForeignKey('experiments.id'),
             nullable=False)
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
     first_parent_plant_id = Column(Integer, ForeignKey('plants.id'))
-    first_parent_gender = Column(Integer(1))
+    first_parent_gender = Column(Integer())
     second_parent_plant_id = Column(Integer, ForeignKey('plants.id'))
-    second_parent_gender = Column(Integer(1))
+    second_parent_gender = Column(Integer())
 
 
 class Plant(TableBase):
@@ -128,8 +121,9 @@ class Plant(TableBase):
     experiment_id = Column(Integer, ForeignKey('experiments.id'),
             nullable=False)
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
-    tray_number = Column(Integer(3))
+    tray_number = Column(Integer())
     tray_position = Column(String(3))
+    chamber_number = Column(Integer())
     chamber_position = Column(String(3))
     anuid = Column(String(45))
     experiment_condition_id = Column(Integer,
@@ -156,6 +150,7 @@ class Species(TableBase):
     species = Column(String(511), nullable=False)
     family = Column(String(255), nullable=False)
     abbreviation = Column(String(5), nullable=False)
+    common_name = Column(String(255))
     __table_args__ = (
             UniqueConstraint("genus", "species"),
             )
@@ -184,7 +179,7 @@ class ExperimentConditionProtcol(TableBase):
     __tablename__ = "experiment_condition_protocols"
     experiment_condition_id = Column(Integer,
             ForeignKey('experiment_conditions.id'), nullable=False)
-    ordinal = Column(Integer(3), nullable=False)
+    ordinal = Column(Integer(), nullable=False)
     protcol_id = Column(Integer, ForeignKey('protocols.id'), nullable=False)
     protcol_notes = Column(Text)
 
@@ -199,7 +194,7 @@ class ExperimentConditionPresetProtcol(TableBase):
     __tablename__ = "experiment_condition_preset_protocols"
     experiment_condition_preset_id = Column(Integer,
             ForeignKey('experiment_condition_presets.id'), nullable=False)
-    ordinal = Column(Integer(3), nullable=False)
+    ordinal = Column(Integer(), nullable=False)
     protcol_id = Column(Integer, ForeignKey('protocols.id'), nullable=False)
 
 # samples table
@@ -231,7 +226,6 @@ def main():
     # create tables in sqlite
     engine = create_engine(ENGINE, echo=False)
     TableBase.metadata.create_all(engine)
-    return True
 
 if __name__ == "__main__":
     main()
