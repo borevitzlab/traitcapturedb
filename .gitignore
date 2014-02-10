@@ -3,6 +3,7 @@
 *.passwd
 *.pyc
 *.swp
+*.egg-info
 .coverage
 
 build
