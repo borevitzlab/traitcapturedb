@@ -7,11 +7,11 @@ traitcapture-db: The database behind the traitcapture project.
 install_requires = [
         "docopt==0.6.1",
         "SQLAlchemy==0.9.2",
+        "coverage==3.7.1",
+        "nose==1.3.0",
         ]
 
 test_requires = [
-        "coverage==3.7.1",
-        "nose==1.3.0",
         "pep8==1.4.6",
         "pylint==1.0.0",
         ]
