@@ -11,8 +11,9 @@ from sqlalchemy.exc import *  # sorry, but fuck writing all these out
 from datetime import datetime
 
 # Create Session class
-ENGINE = "sqlite:///traitcapture.db"
-engine = create_engine(ENGINE)
+ENGINE = "sqlite:///{uri:s}"
+DB_FN = "traitcapture.db"
+engine = create_engine(ENGINE.format(uri=DB_FN))
 Session = sessionmaker(bind=engine)
 
 # Setup base
@@ -31,58 +32,34 @@ class Accession(TableBase):
     __tablename__ = "accessions"
     accession_name = Column(String(255), nullable=False)
     species_id = Column(Integer, ForeignKey('species.id'), nullable=False)
-    anuid = Column(String(45), nullable=False, index=True, unique=True)
     population = Column(String(255))
-    collector_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
     date_collected = Column(DateTime, nullable=False)
-    latitude = Column(Float)
-    longitude = Column(Float)
-    alitude = Column(Float)
-    datum = Column(String(10))  # TODO: this needs to be an enum
+    latitude = Column(Float, nullable=False)
+    longitude = Column(Float, nullable=False)
+    alitude = Column(Float, nullable=False)
+    locality_name = Column(String(255), nullable=False)
+    country = Column(String(45))
     collection_trip_id = Column(Integer, ForeignKey('collection_trips.id'))
-    maternal_lines = Column(Integer())
+    maternal_lines = Column(Integer)
     box_name = Column(String(255))
     source = Column(Text)
     external_id = Column(String(45))
-    background = Column(String(45))
-    generation = Column(String(4))
-    country_origin = Column(String(45))
     habitat = Column(Text)
     notes = Column(Text)
+    ala_id = Column(String(63))
+    data = Column(Text)
 
-    validation = {
-            "accession_name": lambda v: v is not None and isinstance(v, str),
-            "species_id": lambda v: isinstance(v, int),
-            "anuid": lambda v: v is None,
-            }
+#    validation = {
+#            "accession_name": lambda v: v is not None and isinstance(v, str),
+#            "species_id": lambda v: isinstance(v, int),
+#            "anuid": lambda v: v is None,
+#            }
 
     def __init__(self, **kwargs):
         for key, value in kwargs.iteritems():
             self.__setattr__(key, value)
         self.session = Session()
-        self._make_anuid()
-
-    def _make_anuid(self):
-        try:
-            species_abbrev = self.session.query(Species.abbreviation).\
-                   filter(Species.id == self.species_id).one()[0]
-        except:
-            raise NoResultFound()
-        previous_accessions = self.session.query(Accession.id).\
-                filter(Accession.collector_id == self.collector_id,
-                Accession.date_collected == self.date_collected,
-                Accession.species_id == self.species_id).all()
-        accession_counter = len(previous_accessions) + 1
-        anuid = "".join([
-            species_abbrev,
-            "_",
-            str(self.date_collected.year)[:2],
-            str(self.date_collected.month)[:2],
-            str(self.date_collected.day)[:2],
-            "_",
-            str(accession_counter),
-            ])
-        self.anuid = anuid
 
 
 class CollectionTrip(TableBase):
@@ -110,9 +87,9 @@ class Pedigree(TableBase):
             nullable=False)
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
     first_parent_plant_id = Column(Integer, ForeignKey('plants.id'))
-    first_parent_gender = Column(Integer())
+    first_parent_gender = Column(Integer)
     second_parent_plant_id = Column(Integer, ForeignKey('plants.id'))
-    second_parent_gender = Column(Integer())
+    second_parent_gender = Column(Integer)
 
 
 class Plant(TableBase):
@@ -121,9 +98,9 @@ class Plant(TableBase):
     experiment_id = Column(Integer, ForeignKey('experiments.id'),
             nullable=False)
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
-    tray_number = Column(Integer())
+    tray_number = Column(Integer)
     tray_position = Column(String(3))
-    chamber_number = Column(Integer())
+    chamber_number = Column(Integer)
     chamber_position = Column(String(3))
     anuid = Column(String(45))
     experiment_condition_id = Column(Integer,
@@ -179,7 +156,7 @@ class ExperimentConditionProtcol(TableBase):
     __tablename__ = "experiment_condition_protocols"
     experiment_condition_id = Column(Integer,
             ForeignKey('experiment_conditions.id'), nullable=False)
-    ordinal = Column(Integer(), nullable=False)
+    ordinal = Column(Integer, nullable=False)
     protcol_id = Column(Integer, ForeignKey('protocols.id'), nullable=False)
     protcol_notes = Column(Text)
 
@@ -194,7 +171,7 @@ class ExperimentConditionPresetProtcol(TableBase):
     __tablename__ = "experiment_condition_preset_protocols"
     experiment_condition_preset_id = Column(Integer,
             ForeignKey('experiment_condition_presets.id'), nullable=False)
-    ordinal = Column(Integer(), nullable=False)
+    ordinal = Column(Integer, nullable=False)
     protcol_id = Column(Integer, ForeignKey('protocols.id'), nullable=False)
 
 # samples table
@@ -222,10 +199,19 @@ class ExperimentConditionPresetProtcol(TableBase):
 
 
 
-def main():
+def main(filename="traitcapture.db"):
     # create tables in sqlite
-    engine = create_engine(ENGINE, echo=False)
+    engine = create_engine(ENGINE.format(uri=filename), echo=False)
     TableBase.metadata.create_all(engine)
 
 if __name__ == "__main__":
-    main()
+    from sys import argv
+    from os import path
+    try:
+        out_path = argv[1]
+    except IndexError:
+        out_path = ""
+    if path.exists(path.dirname(out_path)):
+        main(out_path)
+    else:
+        main()
