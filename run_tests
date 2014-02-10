@@ -1,5 +1,13 @@
 #!/bin/bash
-set -x
 set -e
 
-nosetests $@ --with-coverage --cover-package traitcapture
+if [ "$1" == "extra" ]
+then
+	tox
+	git clean -Xdi
+elif [ "$1" == "clean" ]
+then
+	git clean -Xdi
+else
+	nosetests $@ --with-coverage --cover-package traitcapture
+fi
