@@ -1,4 +1,5 @@
-from traitcapture import Accession, User, Species, ENGINE
+#!/usr/bin/env python
+from traitcapture.orm import Accession, User, Species, ENGINE
 import csv
 from sqlalchemy.orm import sessionmaker, scoped_session
 from sqlalchemy import create_engine
