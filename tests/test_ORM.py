@@ -87,7 +87,7 @@ class TestSpecies(BaseORMTest):
         """Test adding a species"""
         self.assertTrue(isinstance(record_instance, Species))
         # Consistency
-        for key, value in record.iteritems():
+        for key, value in record.items():
             self.assertEqual(getattr(record_instance, key), value)
         # Insert
         self.session.add(record_instance)
@@ -136,7 +136,7 @@ class TestUser(BaseORMTest):
         record_instance = User(**record)
         self.assertTrue(isinstance(record_instance, User))
         # Consistency
-        for key, value in record.iteritems():
+        for key, value in record.items():
             self.assertEqual(getattr(record_instance, key), value)
         # Insert
         self.session.add(record_instance)
@@ -162,7 +162,7 @@ class TestAccession(BaseORMTest):
         record_instance = Accession(**record)
         self.assertTrue(isinstance(record_instance, Accession))
         # Consistency
-        for key, value in record.iteritems():
+        for key, value in record.items():
             self.assertEqual(getattr(record_instance, key), value)
         # Insert
         self.session.add(record_instance)

@@ -23,7 +23,7 @@ TableBase.id = Column(Integer, primary_key=True)
 
 
 def _validate_kwargs(kwargs, validation):
-    for key, value in kwargs.iteritems():
+    for key, value in kwargs.items():
         if not validation[key](value):
             raise ValueError("Bad value for %s: %r." % (key, value))
 
@@ -57,7 +57,7 @@ class Accession(TableBase):
 #            }
 
     def __init__(self, **kwargs):
-        for key, value in kwargs.iteritems():
+        for key, value in kwargs.items():
             self.__setattr__(key, value)
         self.session = Session()
 
@@ -117,7 +117,7 @@ class User(TableBase):
     organisation = Column(String(45))
 
     def __init__(self, **kwargs):
-        for key, value in kwargs.iteritems():
+        for key, value in kwargs.items():
             self.__setattr__(key, value)
 
 
@@ -134,7 +134,7 @@ class Species(TableBase):
 
     def __init__(self, **kwargs):
         self.session = Session()
-        for key, value in kwargs.iteritems():
+        for key, value in kwargs.items():
             self.__setattr__(key, value)
         if "abbreviation" not in kwargs or not kwargs["abbreviation"]:
             abbr_len = 2
