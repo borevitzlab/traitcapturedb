@@ -59,6 +59,19 @@ class BaseORMTest(BaseTest):
         self.session.close()
         os.remove(self.db_fn)
 
+    def _test_add(self, record, expt_id=1, with_consistency_checks=True):
+        # Create
+        record_instance = self.model(**record)
+        self.assertTrue(isinstance(record_instance, self.model))
+        if with_consistency_checks:
+            # Consistency
+            for key, value in record.items():
+                self.assertEqual(getattr(record_instance, key), value)
+        # Insert
+        self.session.add(record_instance)
+        self.session.commit()
+        self.assertEqual(record_instance.id, expt_id)
+        return record_instance
 
 class TestORMSetup(BaseTest):
     # don't explicity use unittests here, we just want errors to be raised
@@ -73,7 +86,7 @@ class TestORMSetup(BaseTest):
         self.assertTrue(path.exists(db_fn))
 
 class TestSpecies(BaseORMTest):
-
+    model = Species
     def test_add_species(self):
         """Test adding a species"""
         record = {
@@ -82,17 +95,7 @@ class TestSpecies(BaseORMTest):
                 "family": "Myrtaceae",
                 "abbreviation": "Eusco"
                 }
-        # Create
-        record_instance = Species(**record)
-        """Test adding a species"""
-        self.assertTrue(isinstance(record_instance, Species))
-        # Consistency
-        for key, value in record.items():
-            self.assertEqual(getattr(record_instance, key), value)
-        # Insert
-        self.session.add(record_instance)
-        self.session.commit()
-        self.assertEqual(record_instance.id, 2)
+        self._test_add(record, expt_id=2)
 
     def test_add_species_noabbrev(self):
         """Test adding species without giving an abbreviation"""
@@ -103,25 +106,21 @@ class TestSpecies(BaseORMTest):
                 "abbreviation": ""
                 }
         # Create
-        record_instance = Species(**record)
-        self.assertTrue(isinstance(record_instance, Species))
-        # Consistency
+        record_instance = self._test_add(record, expt_id=2,
+                with_consistency_checks=False)
+        # manually check abbreviation
         self.assertEqual(record_instance.abbreviation, "Es")
-        # Insert
-        self.session.add(record_instance)
-        self.session.commit()
-        self.assertEqual(record_instance.id, 2)
 
         # add again and check that the abbreviation changes
         record["species"] = "strezleckii"
-        record_instance = Species(**record)
-        self.session.add(record_instance)
-        self.session.commit()
+        record_instance = self._test_add(record, expt_id=3,
+                with_consistency_checks=False)
+        # manually check abbreviation
         self.assertEqual(record_instance.abbreviation, "Est")
-        self.assertEqual(record_instance.id, 3)
 
 
 class TestUser(BaseORMTest):
+    model = User
     def test_add_user(self):
         """Test adding a user"""
         record = {
@@ -132,25 +131,16 @@ class TestUser(BaseORMTest):
                 "phone_number": "+6123456789",
                 "organisation": "test_organisation"
                 }
-        # Create
-        record_instance = User(**record)
-        self.assertTrue(isinstance(record_instance, User))
-        # Consistency
-        for key, value in record.items():
-            self.assertEqual(getattr(record_instance, key), value)
-        # Insert
-        self.session.add(record_instance)
-        self.session.commit()
-        self.assertEqual(record_instance.id, 2)
+        self._test_add(record, expt_id=2)
 
 
 class TestAccession(BaseORMTest):
+    model = Accession
     def test_add_accession(self):
         """Test adding an accession (required fields only)"""
         record = {
                 "accession_name": "test_accession",
                 "species_id": 1,
-                "collector_id": 1,
                 "user_id": 1,
                 "latitude": 145.0,
                 "longitude": 45.0,
@@ -158,13 +148,4 @@ class TestAccession(BaseORMTest):
                 "locality_name": "Nowhere",
                 "date_collected": datetime(2012, 12, 12, 12, 12, 12,0)
                 }
-        # Create
-        record_instance = Accession(**record)
-        self.assertTrue(isinstance(record_instance, Accession))
-        # Consistency
-        for key, value in record.items():
-            self.assertEqual(getattr(record_instance, key), value)
-        # Insert
-        self.session.add(record_instance)
-        self.session.commit()
-        self.assertEqual(record_instance.id, 1)
+        self._test_add(record)
