@@ -1,5 +1,9 @@
 *.db
-!Tests/test.db
+!tests/data/test.db
 *.passwd
 *.pyc
 *.swp
+.coverage
+
+build
+dist
