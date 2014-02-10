@@ -7,7 +7,7 @@ from sqlalchemy.orm.exc import (
         MultipleResultsFound,
         NoResultFound,
         )
-from sqlalchemy.exc import *  # sorry, but fuck writing all these out
+from sqlalchemy.exc import IntegrityError
 from datetime import datetime
 
 # Create Session class
@@ -37,7 +37,7 @@ class Accession(TableBase):
     date_collected = Column(DateTime, nullable=False)
     latitude = Column(Float, nullable=False)
     longitude = Column(Float, nullable=False)
-    alitude = Column(Float, nullable=False)
+    altitude = Column(Float, nullable=False)
     locality_name = Column(String(255), nullable=False)
     country = Column(String(45))
     collection_trip_id = Column(Integer, ForeignKey('collection_trips.id'))
@@ -123,19 +123,33 @@ class User(TableBase):
 
 class Species(TableBase):
     __tablename__ = "species"
-    genus = Column(String(255), nullable=False)
-    species = Column(String(511), nullable=False)
-    family = Column(String(255), nullable=False)
-    abbreviation = Column(String(5), nullable=False)
-    common_name = Column(String(255))
+    genus = Column(String(255), nullable=False, index=True)
+    species = Column(String(511), nullable=False, index=True)
+    family = Column(String(255), nullable=False, index=True)
+    abbreviation = Column(String(63), nullable=False, unique=True, index=True)
+    common_name = Column(String(255), index=True)
     __table_args__ = (
             UniqueConstraint("genus", "species"),
             )
 
     def __init__(self, **kwargs):
+        self.session = Session()
         for key, value in kwargs.iteritems():
             self.__setattr__(key, value)
-
+        if "abbreviation" not in kwargs or not kwargs["abbreviation"]:
+            abbr_len = 2
+            while abbr_len < 64:
+                g = max(int(abbr_len * 0.4), 1)
+                s = abbr_len - g
+                species_abbrev = self.genus[:g] + self.species[:s]
+                try:
+                    self.session.query(Species).filter(
+                            Species.abbreviation == species_abbrev).one()
+                    abbr_len += 1
+                except NoResultFound:
+                    self.abbreviation = species_abbrev
+                    break
+        self.session.close()
 
 class Protocol(TableBase):
     __tablename__ = "protocols"
@@ -173,30 +187,6 @@ class ExperimentConditionPresetProtcol(TableBase):
             ForeignKey('experiment_condition_presets.id'), nullable=False)
     ordinal = Column(Integer, nullable=False)
     protcol_id = Column(Integer, ForeignKey('protocols.id'), nullable=False)
-
-# samples table
-
-#file structure classes go here once we've decided
-# raw_data_items
-
-
-### RELATIONSHIPS
-
-#ExperimentCondition.protocolis = relationship(
-#        "ExperimentConditionProtocol",
-#        order_by="asc(ExperimentConditionProtocol.ordinal)",
-#        primaryjoin="ExperimentConditionProtocol.experiment_condition_id \
-#        == ExperimentCondition.id"
-#        )
-
-#ExperimentConditionPreset.protocols = relationship(
-#    "Protocol",
-#    order_by="asc(ExperimentConditionPresetProtocol.order)",
-#    primaryjoin="ExperimentConditionPresetProtocol.\
-#        experiment_condition _preset_id == ExperimentConditionPreset.id"
-#    )
-
-
 
 
 def main(filename="traitcapture.db"):

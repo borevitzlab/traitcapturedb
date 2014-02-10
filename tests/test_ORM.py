@@ -4,6 +4,7 @@ from traitcapture import orm
 from traitcapture.orm import TableBase, Accession, Species, User
 from sqlalchemy.orm import sessionmaker, scoped_session
 from sqlalchemy import create_engine
+from sqlalchemy.exc import IntegrityError
 from datetime import datetime
 from tempfile import mkstemp
 from shutil import copy2, rmtree, copytree
@@ -31,14 +32,27 @@ class BaseORMTest(BaseTest):
     def setUp(self):
         super(BaseTest, self).setUp()
         db_fh, self.db_fn = mkstemp()
-        db_fh = os.fdopen(db_fh, "wb")
-        template_fh = open(TEMPLATE_DB, "rb")
-        db_fh.write(template_fh.read())
-        template_fh.close()
-        db_fh.close()
-        self.engine = create_engine("sqlite:///%s" % self.db_fn)
+        self.engine = create_engine("sqlite://")
         orm.Session = sessionmaker(bind=self.engine)
+        orm.TableBase.metadata.create_all(self.engine)
         self.session = orm.Session()
+        usr = User(
+                user_name="test",
+                given_name="test",
+                family_name="user",
+                email="test@example.com",
+                phone="+6123456789",
+                organisation="test organisation"
+                )
+        spe = Species(
+                genus="Test",
+                species="testii",
+                family="testaceae",
+                abbreviation="Tte",
+                )
+        self.session.add(usr)
+        self.session.add(spe)
+        self.session.commit()
 
     def tearDown(self):
         super(BaseTest, self).tearDown()
@@ -61,6 +75,7 @@ class TestORMSetup(BaseTest):
 class TestSpecies(BaseORMTest):
 
     def test_add_species(self):
+        """Test adding a species"""
         record = {
                 "genus": "Eucalyptus",
                 "species": "scoparia",
@@ -69,6 +84,7 @@ class TestSpecies(BaseORMTest):
                 }
         # Create
         record_instance = Species(**record)
+        """Test adding a species"""
         self.assertTrue(isinstance(record_instance, Species))
         # Consistency
         for key, value in record.iteritems():
@@ -78,8 +94,36 @@ class TestSpecies(BaseORMTest):
         self.session.commit()
         self.assertEqual(record_instance.id, 2)
 
+    def test_add_species_noabbrev(self):
+        """Test adding species without giving an abbreviation"""
+        record = {
+                "genus": "Eucalyptus",
+                "species": "scoparia",
+                "family": "Myrtaceae",
+                "abbreviation": ""
+                }
+        # Create
+        record_instance = Species(**record)
+        self.assertTrue(isinstance(record_instance, Species))
+        # Consistency
+        self.assertEqual(record_instance.abbreviation, "Es")
+        # Insert
+        self.session.add(record_instance)
+        self.session.commit()
+        self.assertEqual(record_instance.id, 2)
+
+        # add again and check that the abbreviation changes
+        record["species"] = "strezleckii"
+        record_instance = Species(**record)
+        self.session.add(record_instance)
+        self.session.commit()
+        self.assertEqual(record_instance.abbreviation, "Est")
+        self.assertEqual(record_instance.id, 3)
+
+
 class TestUser(BaseORMTest):
     def test_add_user(self):
+        """Test adding a user"""
         record = {
                 "user_name": "testuser1",
                 "given_name": "test1",
@@ -99,12 +143,19 @@ class TestUser(BaseORMTest):
         self.session.commit()
         self.assertEqual(record_instance.id, 2)
 
+
 class TestAccession(BaseORMTest):
     def test_add_accession(self):
+        """Test adding an accession (required fields only)"""
         record = {
                 "accession_name": "test_accession",
                 "species_id": 1,
                 "collector_id": 1,
+                "user_id": 1,
+                "latitude": 145.0,
+                "longitude": 45.0,
+                "altitude": 45.0,
+                "locality_name": "Nowhere",
                 "date_collected": datetime(2012, 12, 12, 12, 12, 12,0)
                 }
         # Create
@@ -117,4 +168,3 @@ class TestAccession(BaseORMTest):
         self.session.add(record_instance)
         self.session.commit()
         self.assertEqual(record_instance.id, 1)
-
