@@ -8,6 +8,7 @@ install_requires = [
         "docopt==0.6.1",
         "SQLAlchemy==0.9.2",
         "coverage==3.7.1",
+        "msgpack-python==0.4.0",
         "nose==1.3.0",
         ]
 
