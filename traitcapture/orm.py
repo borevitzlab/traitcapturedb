@@ -1,6 +1,14 @@
-from sqlalchemy import Column, String, ForeignKey, Float, DateTime, Text
-from sqlalchemy import Integer, Date, LargeBinary, UniqueConstraint
-from sqlalchemy import create_engine
+from sqlalchemy import (
+        String,
+        ForeignKey,
+        Float,
+        DateTime,
+        Text,
+        Date,
+        LargeBinary,
+        Boolean,
+        )
+from sqlalchemy import Column, Integer, UniqueConstraint, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
 from sqlalchemy.orm.exc import (
@@ -9,6 +17,11 @@ from sqlalchemy.orm.exc import (
         )
 from sqlalchemy.exc import IntegrityError
 from datetime import datetime
+import msgpack
+import json
+PACK = json.dumps
+UNPACK = json.loads
+
 
 # Create Session class
 ENGINE = "sqlite:///{uri:s}"
@@ -18,8 +31,19 @@ Session = sessionmaker(bind=engine)
 
 # Setup base
 TableBase = declarative_base()
-# give all tables a primary key
+    # give all tables a primary key
 TableBase.id = Column(Integer, primary_key=True)
+TableBase.data = Column(LargeBinary)
+
+def pack_extras(self, kwargs):
+    extras = {}
+    for key, value in kwargs.items():
+        if hasattr(self, key):
+            self.__setattr__(key, value)
+        else:
+            extras[key] = value
+    if extras:
+        self.data = PACK(extras)
 
 
 def _validate_kwargs(kwargs, validation):
@@ -32,34 +56,39 @@ class Accession(TableBase):
     __tablename__ = "accessions"
     accession_name = Column(String(255), nullable=False)
     species_id = Column(Integer, ForeignKey('species.id'), nullable=False)
-    population = Column(String(255))
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    has_seed = Column(Boolean, nullable=False, default=True)
     date_collected = Column(DateTime, nullable=False)
     latitude = Column(Float, nullable=False)
     longitude = Column(Float, nullable=False)
     altitude = Column(Float, nullable=False)
-    locality_name = Column(String(255), nullable=False)
+    locality_name = Column(String(255))
+    population = Column(String(255))
     country = Column(String(45))
     collection_trip_id = Column(Integer, ForeignKey('collection_trips.id'))
     maternal_lines = Column(Integer)
-    box_name = Column(String(255))
+    storage_location = Column(Text)
     source = Column(Text)
     external_id = Column(String(45))
-    habitat = Column(Text)
     notes = Column(Text)
     ala_id = Column(String(63))
-    data = Column(Text)
+    first_parent_id = Column(Integer,
+            ForeignKey('accessions.id', post_update=True),
+            nullable=False)
+    first_parent_gender = Column(Integer)
+    second_parent_id = Column(Integer,
+            ForeignKey('accessions.id', post_update=True)
+            )
+    second_parent_gender = Column(Integer)
 
 #    validation = {
 #            "accession_name": lambda v: v is not None and isinstance(v, str),
 #            "species_id": lambda v: isinstance(v, int),
 #            "anuid": lambda v: v is None,
 #            }
-
     def __init__(self, **kwargs):
-        for key, value in kwargs.items():
-            self.__setattr__(key, value)
-        self.session = Session()
+        super(Accession, self).__init__()
+        pack_extras(self, kwargs)
 
 
 class CollectionTrip(TableBase):
@@ -80,31 +109,19 @@ class Experiment(TableBase):
     notes = Column(Text)
 
 
-class Pedigree(TableBase):
-    __tablename__ = "pedigrees"
-    accession_id = Column(Integer, ForeignKey('accessions.id'), nullable=False)
-    experiment_id = Column(Integer, ForeignKey('experiments.id'),
-            nullable=False)
-    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
-    first_parent_plant_id = Column(Integer, ForeignKey('plants.id'))
-    first_parent_gender = Column(Integer)
-    second_parent_plant_id = Column(Integer, ForeignKey('plants.id'))
-    second_parent_gender = Column(Integer)
-
-
 class Plant(TableBase):
     __tablename__ = "plants"
+    plant_name = Column(String(127), nullable=False, unique=True)
     accession_id = Column(Integer, ForeignKey('accessions.id'), nullable=False)
     experiment_id = Column(Integer, ForeignKey('experiments.id'),
             nullable=False)
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
-    tray_number = Column(Integer)
-    tray_position = Column(String(3))
-    chamber_number = Column(Integer)
-    chamber_position = Column(String(3))
-    anuid = Column(String(45))
-    experiment_condition_id = Column(Integer,
-            ForeignKey('experiment_conditions.id'), nullable=False)
+    location = Column(String(127))
+    layout = Column(Integer)
+    layout_type = Column(String(63))
+    experiment_condition = Column(Text)
+#    experiment_condition_id = Column(Integer,
+#            ForeignKey('experiment_conditions.id'), nullable=False)
 
 
 class User(TableBase):
@@ -151,42 +168,42 @@ class Species(TableBase):
                     break
         self.session.close()
 
-class Protocol(TableBase):
-    __tablename__ = "protocols"
-    name = Column(String(45), unique=True, nullable=False)
-    protocol = Column(Text, nullable=False)
-    machine_instructions = Column(LargeBinary)
-
-
-class ExperimentCondition(TableBase):
-    __tablename__ = "experiment_conditions"
-    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
-    experiment_id = Column(Integer, ForeignKey('experiments.id'),
-            nullable=False)
-    notes = Column(Text)
-
-
-class ExperimentConditionProtcol(TableBase):
-    __tablename__ = "experiment_condition_protocols"
-    experiment_condition_id = Column(Integer,
-            ForeignKey('experiment_conditions.id'), nullable=False)
-    ordinal = Column(Integer, nullable=False)
-    protcol_id = Column(Integer, ForeignKey('protocols.id'), nullable=False)
-    protcol_notes = Column(Text)
-
-
-class ExperimentConditionPreset(TableBase):
-    __tablename__ = "experiment_condition_presets"
-    name = Column(String(45), index=True, nullable=False)
-    description = Column(String(255), index=True)
-    notes = Column(Text)
-
-class ExperimentConditionPresetProtcol(TableBase):
-    __tablename__ = "experiment_condition_preset_protocols"
-    experiment_condition_preset_id = Column(Integer,
-            ForeignKey('experiment_condition_presets.id'), nullable=False)
-    ordinal = Column(Integer, nullable=False)
-    protcol_id = Column(Integer, ForeignKey('protocols.id'), nullable=False)
+#class Protocol(TableBase):
+#    __tablename__ = "protocols"
+#    name = Column(String(45), unique=True, nullable=False)
+#    protocol = Column(Text, nullable=False)
+#    machine_instructions = Column(LargeBinary)
+#
+#
+#class ExperimentCondition(TableBase):
+#    __tablename__ = "experiment_conditions"
+#    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+#    experiment_id = Column(Integer, ForeignKey('experiments.id'),
+#            nullable=False)
+#    notes = Column(Text)
+#
+#
+#class ExperimentConditionProtcol(TableBase):
+#    __tablename__ = "experiment_condition_protocols"
+#    experiment_condition_id = Column(Integer,
+#            ForeignKey('experiment_conditions.id'), nullable=False)
+#    ordinal = Column(Integer, nullable=False)
+#    protcol_id = Column(Integer, ForeignKey('protocols.id'), nullable=False)
+#    protcol_notes = Column(Text)
+#
+#
+#class ExperimentConditionPreset(TableBase):
+#    __tablename__ = "experiment_condition_presets"
+#    name = Column(String(45), index=True, nullable=False)
+#    description = Column(String(255), index=True)
+#    notes = Column(Text)
+#
+#class ExperimentConditionPresetProtcol(TableBase):
+#    __tablename__ = "experiment_condition_preset_protocols"
+#    experiment_condition_preset_id = Column(Integer,
+#            ForeignKey('experiment_condition_presets.id'), nullable=False)
+#    ordinal = Column(Integer, nullable=False)
+#    protcol_id = Column(Integer, ForeignKey('protocols.id'), nullable=False)
 
 
 def main(filename="traitcapture.db"):
@@ -204,4 +221,6 @@ if __name__ == "__main__":
     if path.exists(path.dirname(out_path)):
         main(out_path)
     else:
+        print "Warning: couldn't create db at {}".format(out_path)
+        print "Using ./traitcapture.db as db path"
         main()
