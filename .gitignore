@@ -1,5 +1,11 @@
 *.db
-!Tests/test.db
+!tests/data/test.db
 *.passwd
 *.pyc
 *.swp
+*.egg-info
+.coverage
+
+build
+dist
+.tox

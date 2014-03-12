@@ -2,156 +2,293 @@ SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0;
 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0;
 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='TRADITIONAL';
 
-CREATE SCHEMA IF NOT EXISTS `mydb` DEFAULT CHARACTER SET latin1 COLLATE latin1_swedish_ci ;
-USE `mydb` ;
+CREATE SCHEMA IF NOT EXISTS `traitcapture` DEFAULT CHARACTER SET utf8 COLLATE utf8_bin;
+USE `traitcapture`;
+
 
 -- -----------------------------------------------------
--- Table `mydb`.`accession`
+-- Table `traitcapture`.`collection_trips`
 -- -----------------------------------------------------
-CREATE  TABLE IF NOT EXISTS `mydb`.`accession` (
-  `id_accession` BIGINT UNSIGNED NOT NULL ,
-  `external_stocknum` VARCHAR(45) NULL COMMENT 'e.g. ABRC ID' ,
-  `source` TEXT NULL COMMENT 'ie who sent us the seeds (e.g. ABRC)' ,
-  `accession_name` VARCHAR(45) NOT NULL ,
-  `ecotype` VARCHAR(45) NULL ,
-  `background` VARCHAR(45) NULL ,
-  `generation` VARCHAR(45) NULL ,
-  `country_origin` VARCHAR(45) NULL ,
-  `gps_lat` DECIMAL(20,16) NULL ,
-  `gps_long` DECIMAL(20,16) NULL ,
-  `altitude` DECIMAL(10,6) NULL ,
-  `collection_date` DATETIME NULL ,
-  `collector_name` TINYTEXT NULL ,
-  `parental_id` BIGINT UNSIGNED NULL COMMENT 'ID of parental  accession (if available)' ,
-  `ploidy` VARCHAR(45) NULL ,
-  `bulk_or_matern` VARCHAR(45) NULL COMMENT 'Source is: bulk or maternal line?' ,
-  `habitat` VARCHAR(45) NULL ,
-  `qr_code` VARCHAR(45) NULL ,
+CREATE  TABLE IF NOT EXISTS `traitcapture`.`collection_trips` (
+  `id` INT UNSIGNED NOT NULL ,
+  `user_id` INT UNSIGNED NOT NULL ,
+  `start_date` DATETIME NOT NULL ,
+  `end_date` DATETIME NOT NULL ,
+  `location` TEXT NOT NULL ,
   `notes` TEXT NULL ,
+  `kml` LONGTEXT NULL ,
+  CONSTRAINT `fk_user_id_collection_trips`
+    FOREIGN KEY (`user_id` )
+    REFERENCES `traitcapture`.`users` (`id` )
+    ON DELETE NO ACTION
+    ON UPDATE NO ACTION ,
+  PRIMARY KEY (`id`) ,
+  UNIQUE INDEX `id_UNIQUE` (`id` ASC)
+  )
+ENGINE = InnoDB;
+
+
+-- -----------------------------------------------------
+-- Table `traitcapture`.`species`
+-- -----------------------------------------------------
+CREATE  TABLE IF NOT EXISTS `traitcapture`.`species` (
+  `id` BIGINT UNSIGNED NOT NULL ,
+  -- colate these as latin1_bin so they take 1 byte per char, 
+  -- and fit into the index length limit of 767b
+  `genus` VARCHAR(255) COLLATE latin1_bin NOT NULL ,
+  `species` VARCHAR(511) COLLATE latin1_bin NOT NULL ,
+  `family` VARCHAR(255) NULL ,
+  `abreviation` VARCHAR(5) NOT NULL ,
+  UNIQUE INDEX `abreviation_UNIQUE` (`abreviation` ASC) ,
+  UNIQUE INDEX `species_genus_UNIQUE` (`genus`, `species`) ,
+  PRIMARY KEY (`id`) ,
+  UNIQUE INDEX `id_UNIQUE` (`id` ASC)
+  )
+ENGINE = InnoDB;
+
+
+-- -----------------------------------------------------
+-- Table `traitcapture`.`accessions`
+-- -----------------------------------------------------
+CREATE  TABLE IF NOT EXISTS `traitcapture`.`accessions` (
+  `id` BIGINT UNSIGNED NOT NULL ,
+  `accession_name` VARCHAR(255) NOT NULL ,
   `species_id` BIGINT UNSIGNED NULL ,
+  `anuid` VARCHAR(45) NOT NULL ,
+  `population` VARCHAR(255) NULL ,
+  `collector_id` INT UNSIGNED NULL ,
+  `date_collected` DATETIME NOT NULL,
+  `latitude` DECIMAL(20,16) NULL ,
+  `longitude` DECIMAL(20,16) NULL ,
+  `altitude` DECIMAL(10,6) NULL ,
+  `datum` VARCHAR(10) NOT NULL DEFAULT "WGS84" ,
+  `collection_trip_id` INT UNSIGNED NULL ,
+  `maternal_lines` TINYINT UNSIGNED NULL COMMENT 'How many maternal lines in bulk collection, or 1 for pure maternal lines?' ,
+  `box_name` VARCHAR(255) NULL , -- NOT SURE HOW TO STORE THIS
+  `source` TEXT NULL COMMENT 'ie who sent us the seeds (e.g. ABRC)' ,
+  `external_id` VARCHAR(45) NULL COMMENT 'e.g. ABRC ID' ,
+  `background` VARCHAR(45) NULL COMMENT "If mutant, which background?" ,
+  `generation` VARCHAR(3) NULL ,
+  `country_origin` VARCHAR(45) NULL ,
+  `habitat` TEXT NULL ,
+  `notes` TEXT NULL ,
+  CONSTRAINT `fk_collector_id_accessions`
+    FOREIGN KEY (`collector_id`)
+    REFERENCES `traitcapture`.`users` (`id`)
+    ON DELETE NO ACTION
+    ON UPDATE NO ACTION ,
+  CONSTRAINT `fk_collection_trip_id_accessions`
+    FOREIGN KEY (`collection_trip_id`)
+    REFERENCES `traitcapture`.`collection_trips` (`id`)
+    ON DELETE NO ACTION
+    ON UPDATE NO ACTION ,
+  CONSTRAINT `fk_species_id_accessions`
+    FOREIGN KEY (`species_id`)
+    REFERENCES `traitcapture`.`species` (`id`)
+    ON DELETE NO ACTION
+    ON UPDATE NO ACTION ,
   UNIQUE INDEX `accession_name_UNIQUE` (`accession_name` ASC) ,
-  PRIMARY KEY (`id_accession`) ,
-  UNIQUE INDEX `id_UNIQUE` (`id_accession` ASC) )
+  UNIQUE INDEX `anuid_UNIQUE` (`anuid` ASC) ,
+  PRIMARY KEY (`id`) ,
+  UNIQUE INDEX `id_UNIQUE` (`id` ASC)
+  )
 ENGINE = InnoDB;
 
-
--- -----------------------------------------------------
--- Table `mydb`.`tray`
--- -----------------------------------------------------
-CREATE  TABLE IF NOT EXISTS `mydb`.`tray` (
-  `id_tray` BIGINT UNSIGNED NOT NULL ,
-  `experiment_tray_number` TINYINT UNSIGNED NULL ,
-  `qr_code` BLOB NULL ,
-  PRIMARY KEY (`id_tray`) )
-ENGINE = InnoDB;
+-- Fulltext index not supported on InnoDB until 5.6.4 ish, my server's running 5.1.5
+-- CREATE FULLTEXT INDEX `notes_FULLTEXT` ON `traitcapture`.`accessions` (`notes`);
 
 
 -- -----------------------------------------------------
--- Table `mydb`.`plant`
+-- Table `traitcapture`.`plants`
 -- -----------------------------------------------------
-CREATE  TABLE IF NOT EXISTS `mydb`.`plant` (
-  `id_plant` BIGINT UNSIGNED NOT NULL COMMENT 'A unique 5 digit alphnumeric for each plant' ,
-  `tray_id_tray` BIGINT UNSIGNED NOT NULL ,
-  `experiment_id` BIGINT UNSIGNED NOT NULL ,
-  `anuid` VARCHAR(45) NOT NULL COMMENT 'This is the ANU ID that is generated from the plant\'s unique number, spp type' ,
-  `tray_coord` VARCHAR(2) NOT NULL ,
-  `qr_code` BLOB NULL ,
+CREATE  TABLE IF NOT EXISTS `traitcapture`.`plants` (
+  `id` BIGINT UNSIGNED NOT NULL COMMENT 'A unique 5 digit alphnumeric for each plant' ,
   `accession_id` BIGINT UNSIGNED NOT NULL ,
-  PRIMARY KEY (`id_plant`, `accession_id`) ,
-  UNIQUE INDEX `id_UNIQUE` (`id_plant` ASC) ,
-  INDEX `fk_plant_accession` (`accession_id` ASC) ,
-  INDEX `fk_plant_tray1` (`tray_id_tray` ASC) ,
-  CONSTRAINT `fk_plant_accession`
+  `experiment_id` BIGINT UNSIGNED NOT NULL ,
+  `user_id` INT UNSIGNED NOT NULL ,
+  `tray_number` TINYINT UNSIGNED NOT NULL ,
+  `tray_position` VARCHAR(3) NOT NULL ,
+  `tray_chamber_position` VARCHAR(3) NULL ,
+  `anuid` VARCHAR(45) NOT NULL COMMENT 'This is the ANU ID that is generated from the plant\'s unique number, spp type' ,
+  `experiment_condition_id` BIGINT UNSIGNED NOT NULL ,
+  UNIQUE INDEX `experiment_tray_position_UNIQUE` (`experiment_id`, `tray_number`, `tray_position`) ,
+  CONSTRAINT `fk_accession_id_plants`
     FOREIGN KEY (`accession_id` )
-    REFERENCES `mydb`.`accession` (`id_accession` )
+    REFERENCES `traitcapture`.`accessions` (`id` )
     ON DELETE NO ACTION
     ON UPDATE NO ACTION,
-  CONSTRAINT `fk_plant_tray1`
-    FOREIGN KEY (`tray_id_tray` )
-    REFERENCES `mydb`.`tray` (`id_tray` )
+  CONSTRAINT `fk_experiment_condition_id_plants`
+    FOREIGN KEY (`experiment_condition_id` )
+    REFERENCES `traitcapture`.`experiment_conditons` (`id` )
     ON DELETE NO ACTION
-    ON UPDATE NO ACTION)
+    ON UPDATE NO ACTION,
+  CONSTRAINT `fk_user_id_plants`
+    FOREIGN KEY (`user_id` )
+    REFERENCES `traitcapture`.`users` (`id` )
+    ON DELETE NO ACTION
+    ON UPDATE NO ACTION ,
+  PRIMARY KEY (`id`) ,
+  UNIQUE INDEX `id_UNIQUE` (`id` ASC)
+  )
 ENGINE = InnoDB;
 
 
 -- -----------------------------------------------------
--- Table `mydb`.`experiment`
+-- Table `traitcapture`.`pedigrees`
 -- -----------------------------------------------------
-CREATE  TABLE IF NOT EXISTS `mydb`.`experiment` (
-  `id_experiment` BIGINT UNSIGNED NOT NULL ,
+CREATE  TABLE IF NOT EXISTS `traitcapture`.`pedigrees` (
+  `id` BIGINT UNSIGNED NOT NULL ,
+  `accession_id` BIGINT UNSIGNED NOT NULL ,
+  `user_id` INT UNSIGNED NOT NULL ,
+  `first_parent_id` BIGINT UNSIGNED NOT NULL ,
+  `first_parent_gender` TINYINT UNSIGNED NOT NULL ,
+  `second_parent_id` BIGINT UNSIGNED NOT NULL ,
+  `second_parent_gender` TINYINT UNSIGNED NOT NULL ,
+  CONSTRAINT `fk_first_parent_id_pedigrees`
+    FOREIGN KEY (`first_parent_id` )
+    REFERENCES `traitcapture`.`plants` (`id` )
+    ON DELETE NO ACTION
+    ON UPDATE NO ACTION,
+  CONSTRAINT `fk_second_parent_id_pedigrees`
+    FOREIGN KEY (`second_parent_id` )
+    REFERENCES `traitcapture`.`plants` (`id` )
+    ON DELETE NO ACTION
+    ON UPDATE NO ACTION,
+  CONSTRAINT `fk_user_id_pedigrees`
+    FOREIGN KEY (`user_id` )
+    REFERENCES `traitcapture`.`users` (`id` )
+    ON DELETE NO ACTION
+    ON UPDATE NO ACTION ,
+  PRIMARY KEY (`id`) ,
+  UNIQUE INDEX `id_UNIQUE` (`id` ASC)
+  )
+ENGINE = InnoDB;
+
+
+-- -----------------------------------------------------
+-- Table `traitcapture`.`experiments`
+-- -----------------------------------------------------
+CREATE  TABLE IF NOT EXISTS `traitcapture`.`experiments` (
+  `id` BIGINT UNSIGNED NOT NULL ,
   `user_id` INT UNSIGNED NOT NULL ,
   `start_date` DATE NOT NULL ,
   `end_date` DATE NOT NULL ,
-  `protocol_pre_treatments` TEXT NULL ,
-  `protocol_in_chamber` TEXT NULL ,
-  `protocol_trayscan_experiment` TEXT NULL ,
-  `protocol_trayscan_fluorescence` TEXT NULL ,
   `notes` TEXT NULL ,
-  PRIMARY KEY (`id_experiment`) )
+  PRIMARY KEY (`id`) ,
+  UNIQUE INDEX `id_UNIQUE` (`id` ASC)
+  )
 ENGINE = InnoDB;
 
 
 -- -----------------------------------------------------
--- Table `mydb`.`species`
+-- Table `traitcapture`.`protocols`
 -- -----------------------------------------------------
-CREATE  TABLE IF NOT EXISTS `mydb`.`species` (
-  `id_species` BIGINT UNSIGNED NOT NULL ,
-  `species_genus` VARCHAR(127) NOT NULL ,
-  `species_species` VARCHAR(127) NOT NULL ,
-  `species_abrv` VARCHAR(3) NOT NULL ,
-  PRIMARY KEY (`id_species`) ,
-  UNIQUE INDEX `id_UNIQUE` (`id_species` ASC) ,
-  UNIQUE INDEX `species_abrv_UNIQUE` (`species_abrv` ASC) )
+CREATE  TABLE IF NOT EXISTS `traitcapture`.`protocols` (
+  `id` BIGINT UNSIGNED NOT NULL ,
+  `protocol` LONGTEXT NOT NULL ,
+  `machine_instructions` LONGTEXT NULL ,
+  PRIMARY KEY (`id`) ,
+  UNIQUE INDEX `id_UNIQUE` (`id` ASC)
+  )
 ENGINE = InnoDB;
 
 
 -- -----------------------------------------------------
--- Table `mydb`.`raw_data`
+-- Table `traitcapture`.`experiment_conditions` NOT FINISHED
 -- -----------------------------------------------------
-CREATE  TABLE IF NOT EXISTS `mydb`.`raw_data` (
-  `id_raw_data` BIGINT UNSIGNED NOT NULL ,
+CREATE  TABLE IF NOT EXISTS `traitcapture`.`experiment_conditions` (
+  `id` BIGINT UNSIGNED NOT NULL ,
+  `experiment_id` BIGINT UNSIGNED NOT NULL ,
+-- foreign keys referencing condtion protocols. full list to come
+-- actual conditions, one field per above
+  `notes` TEXT NULL ,
+  CONSTRAINT `fk_experiment_id_experiment_conditions`
+    FOREIGN KEY (`experiment_id`)
+    REFERENCES `traitcapture`.`experiments` (`id`)
+    ON DELETE NO ACTION
+    ON UPDATE NO ACTION,
+  PRIMARY KEY (`id`) ,
+  UNIQUE INDEX `id_UNIQUE` (`id` ASC)
+  )
+ENGINE = InnoDB;
+
+
+-- -----------------------------------------------------
+-- Table `traitcapture`.`experiment_condition_presets` NOT FINISHED
+-- -----------------------------------------------------
+CREATE  TABLE IF NOT EXISTS `traitcapture`.`experiment_condition_presets` (
+  `id` BIGINT UNSIGNED NOT NULL ,
+-- foreign keys referencing condtion protocols. full list to come
+  `notes` TEXT NULL ,
+  PRIMARY KEY (`id`) ,
+  UNIQUE INDEX `id_UNIQUE` (`id` ASC)
+  )
+ENGINE = InnoDB;
+
+
+-- -----------------------------------------------------
+-- Table `traitcapture`.`raw_data_items` NOT FINISHED
+-- -----------------------------------------------------
+CREATE  TABLE IF NOT EXISTS `traitcapture`.`raw_data_items` (
+  `id` BIGINT UNSIGNED NOT NULL ,
+  `experiment_id` BIGINT UNSIGNED NOT NULL ,
   `file_structure_id` INT UNSIGNED NOT NULL ,
   `plant_id` BIGINT UNSIGNED NOT NULL ,
   `file_source_id` INT UNSIGNED NOT NULL ,
-  `md5sum` BINARY(16) NOT NULL ,
-  PRIMARY KEY (`id_raw_data`) ,
-  UNIQUE INDEX `idraw_data_UNIQUE` (`id_raw_data` ASC) )
+  `checksum` VARCHAR(64) NOT NULL ,
+  CONSTRAINT `fk_experiment_id_raw_data_items`
+    FOREIGN KEY (`experiment_id`)
+    REFERENCES `traitcapture`.`experiments` (`id`)
+    ON DELETE NO ACTION
+    ON UPDATE NO ACTION,
+  PRIMARY KEY (`id`) ,
+  UNIQUE INDEX `id_UNIQUE` (`id` ASC)
+  )
 ENGINE = InnoDB;
 
 
 -- -----------------------------------------------------
--- Table `mydb`.`file_sources`
+-- Table `traitcapture`.`file_sources` NOT FINISHED
 -- -----------------------------------------------------
-CREATE  TABLE IF NOT EXISTS `mydb`.`file_sources` (
-  `id_file_sources` INT UNSIGNED NOT NULL ,
+CREATE  TABLE IF NOT EXISTS `traitcapture`.`file_sources` (
+  `id` INT UNSIGNED NOT NULL ,
   `owner` VARCHAR(45) NULL ,
   `uri` VARCHAR(255) NULL ,
-  PRIMARY KEY (`id_file_sources`) )
+  PRIMARY KEY (`id`) ,
+  UNIQUE INDEX `id_UNIQUE` (`id` ASC)
+  )
 ENGINE = InnoDB;
 
 
 -- -----------------------------------------------------
--- Table `mydb`.`file_structure`
+-- Table `traitcapture`.`file_structure` NOT FINISHED
 -- -----------------------------------------------------
-CREATE  TABLE IF NOT EXISTS `mydb`.`file_structure` (
-  `id_file_structure` INT UNSIGNED NOT NULL ,
+CREATE  TABLE IF NOT EXISTS `traitcapture`.`file_structure` (
+  `id` INT UNSIGNED NOT NULL ,
   `file_type` VARCHAR(45) NULL ,
-  PRIMARY KEY (`id_file_structure`) ,
-  UNIQUE INDEX `idfile_structure_UNIQUE` (`id_file_structure` ASC) )
+  PRIMARY KEY (`id`) ,
+  UNIQUE INDEX `id_UNIQUE` (`id` ASC)
+  )
 ENGINE = InnoDB;
 
 
 -- -----------------------------------------------------
--- Table `mydb`.`users`
+-- Table `traitcapture`.`users`
 -- -----------------------------------------------------
-CREATE  TABLE IF NOT EXISTS `mydb`.`users` (
-  `id_users` INT UNSIGNED NOT NULL ,
+CREATE  TABLE IF NOT EXISTS `traitcapture`.`users` (
+  `id` INT UNSIGNED NOT NULL ,
   `user_name` VARCHAR(45) NOT NULL ,
-  `lab` VARCHAR(45) NOT NULL ,
-  PRIMARY KEY (`id_users`) ,
-  UNIQUE INDEX `user_name_UNIQUE` (`user_name` ASC) )
+  `given_name` VARCHAR(511) NOT NULL ,
+  `family_name` VARCHAR(511) NOT NULL ,
+  `email` VARCHAR(45) NOT NULL ,
+  `phone` VARCHAR(31) NULL ,
+  `organisation` VARCHAR(45) NOT NULL ,
+  UNIQUE INDEX `user_name_UNIQUE` (`user_name` ASC) ,
+  UNIQUE INDEX `email_UNIQUE` (`email` ASC) ,
+  PRIMARY KEY (`id`) ,
+  UNIQUE INDEX `id_UNIQUE` (`id` ASC)
+  )
 ENGINE = InnoDB;
-
 
 
 SET SQL_MODE=@OLD_SQL_MODE;
