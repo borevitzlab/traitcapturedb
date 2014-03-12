@@ -21,9 +21,16 @@ from datetime import datetime
 import msgpack
 import json
 
+if bytes == str:
+    # py2
+    PACK = json.dumps
+    UNPACK = json.loads
+else:
+    #python3
+    PACK = lambda x: bytes(json.dumps(x), encoding="utf8")
+    UNPACK = lambda x: json.loads(x.decode("utf8"))
 
-PACK = json.dumps
-UNPACK = json.loads
+
 ENGINE = "sqlite:///{uri:s}"
 DB_FN = "traitcapture.db"
 DATE_STR_FORMAT = "%Y-%m-%d"

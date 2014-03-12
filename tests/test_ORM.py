@@ -11,6 +11,10 @@ from shutil import copy2, rmtree, copytree
 import os
 from os import path, makedirs
 
+try:
+    unicode("s")
+except NameError:
+    unicode = str
 
 TEST_DIR = path.dirname(__file__)
 DATA_DIR = path.join(TEST_DIR, "data")
