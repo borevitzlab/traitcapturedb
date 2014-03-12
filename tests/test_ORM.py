@@ -1,7 +1,7 @@
 import unittest
 import traitcapture
 from traitcapture import orm
-from traitcapture.orm import TableBase, Accession, Species, User
+from traitcapture.orm import TableBase, Accession, Species, User, Experiment
 from sqlalchemy.orm import sessionmaker, scoped_session
 from sqlalchemy import create_engine
 from sqlalchemy.exc import IntegrityError
@@ -36,6 +36,7 @@ class BaseORMTest(BaseTest):
         orm.Session = sessionmaker(bind=self.engine)
         orm.TableBase.metadata.create_all(self.engine)
         self.session = orm.Session()
+        # add some existing data
         usr = User(
                 user_name="test",
                 given_name="test",
@@ -59,14 +60,19 @@ class BaseORMTest(BaseTest):
         self.session.close()
         os.remove(self.db_fn)
 
-    def _test_add(self, record, expt_id=1, with_consistency_checks=True):
+    def _test_add(self, record, expt_id=1, consistency=True):
         # Create
         record_instance = self.model(**record)
         self.assertTrue(isinstance(record_instance, self.model))
-        if with_consistency_checks:
-            # Consistency
-            for key, value in record.items():
-                self.assertEqual(getattr(record_instance, key), value)
+        if consistency:
+            if isinstance(consistency, dict):
+                # Consistency dict from user
+                for key, value in consistency.items():
+                    self.assertEqual(getattr(record_instance, key), value)
+            else:
+                # Check consistency with supplied record dict
+                for key, value in record.items():
+                    self.assertEqual(getattr(record_instance, key), value)
         # Insert
         self.session.add(record_instance)
         self.session.commit()
@@ -84,6 +90,7 @@ class TestORMSetup(BaseTest):
         db_fn = path.join(OUT_DIR, "test.db")
         orm.main(db_fn)
         self.assertTrue(path.exists(db_fn))
+
 
 class TestSpecies(BaseORMTest):
     model = Species
@@ -107,14 +114,14 @@ class TestSpecies(BaseORMTest):
                 }
         # Create
         record_instance = self._test_add(record, expt_id=2,
-                with_consistency_checks=False)
+                consistency=False)
         # manually check abbreviation
         self.assertEqual(record_instance.abbreviation, "Es")
 
         # add again and check that the abbreviation changes
         record["species"] = "strezleckii"
         record_instance = self._test_add(record, expt_id=3,
-                with_consistency_checks=False)
+                consistency=False)
         # manually check abbreviation
         self.assertEqual(record_instance.abbreviation, "Est")
 
@@ -133,6 +140,24 @@ class TestUser(BaseORMTest):
                 }
         self._test_add(record, expt_id=2)
 
+class TestExperiment(BaseORMTest):
+    model = Experiment
+    def test_add_experiment(self):
+        """Test adding a expt"""
+        record = {
+                "user_id": 1,
+                "start_date": "2014-02-21",
+                "end_date": "2014-02-24",
+                "notes": "WVDSFSDFSDFSDFSDFKjsaf;lsdkfjaslkdfjasd"
+                }
+        expect = {
+                "user_id": 1,
+                "start_date": datetime(2014, 2, 21, 0, 0),
+                "end_date": datetime(2014, 2, 24, 0, 0),
+                "notes": "WVDSFSDFSDFSDFSDFKjsaf;lsdkfjaslkdfjasd"
+                }
+        self._test_add(record, consistency=expect)
+
 
 class TestAccession(BaseORMTest):
     model = Accession
@@ -149,3 +174,63 @@ class TestAccession(BaseORMTest):
                 "date_collected": datetime(2012, 12, 12, 12, 12, 12,0)
                 }
         self._test_add(record)
+
+    def test_add_accession_full(self):
+        """Test adding an accession (all fields)"""
+        record = {
+                "accession_name": "test_accession2",
+                "species_id": 1,
+                "user_id": 1,
+                "latitude": 145.0,
+                "longitude": 45.0,
+                "altitude": 45.0,
+                "locality_name": "Nowhere",
+                "date_collected": datetime(2012, 12, 12, 12, 12, 12,0),
+                "population": "Test Populations",
+                "country": "straya",
+                "maternal_lines": -1,
+                "storage_location": "In the box that noone knows of.",
+                "source": "ABRC",
+                "external_id": "abc12345",
+                "notes": "Lots of notes here!!!",
+                "ala_id": "ala:dccacddacdafcad8d998cad89cd89a8c8dcd4cda",
+                }
+        self._test_add(record)
+
+    def test_add_accession_extra(self):
+        """Test adding an accession (all fields, plus some extra columns)"""
+        record = {
+                "accession_name": "test_accession2",
+                "species_id": 1,
+                "user_id": 1,
+                "latitude": 145.0,
+                "longitude": 45.0,
+                "altitude": 45.0,
+                "locality_name": "Nowhere",
+                "date_collected": datetime(2012, 12, 12, 12, 12, 12,0),
+                "population": "Test Populations",
+                "country": "straya",
+                "maternal_lines": -1,
+                "source": "ABRC",
+                "external_id": "abc12345",
+                "notes": "Lots of notes here!!!",
+                "ala_id": "ala:dccacddacdafcad8d998cad89cd89a8c8dcd4cda",
+                }
+        extras = {
+                "habitat": "Barren Concrete",
+                "plant_height": 23423,
+                "box_name": "In the box in the freezer that noone knows of",
+                "some_weird_shit_noone_cares_for": "asdfjsadlfksfsadfsdafd234",
+                }
+        record.update(extras)
+        record_instance = self._test_add(record,
+                consistency=False)
+
+        # UNPACK converts str to unicode, so we have to
+        expect_extras = {}
+        for k, v in extras.items():
+            if isinstance(v, str):
+                expect_extras[unicode(k)] = unicode(v)
+            else:
+                expect_extras[unicode(k)] = v
+        self.assertDictEqual(orm.UNPACK(record_instance.data), expect_extras)
