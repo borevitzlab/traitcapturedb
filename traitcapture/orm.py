@@ -1,3 +1,4 @@
+from __future__ import print_function
 from sqlalchemy import (
         String,
         ForeignKey,
@@ -190,6 +191,6 @@ if __name__ == "__main__":
     if path.exists(path.dirname(out_path)):
         main(out_path)
     else:
-        print "Warning: couldn't create db at {}".format(out_path)
-        print "Using ./traitcapture.db as db path"
+        print("Warning: couldn't create db at {}".format(out_path))
+        print("Using ./traitcapture.db as db path")
         main()
