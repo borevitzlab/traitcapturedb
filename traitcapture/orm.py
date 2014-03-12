@@ -19,13 +19,14 @@ from sqlalchemy.exc import IntegrityError
 from datetime import datetime
 import msgpack
 import json
+
+
 PACK = json.dumps
 UNPACK = json.loads
-
-
-# Create Session class
 ENGINE = "sqlite:///{uri:s}"
 DB_FN = "traitcapture.db"
+DATE_STR_FORMAT = "%Y-%m-%d"
+# Create Session class
 engine = create_engine(ENGINE.format(uri=DB_FN))
 Session = sessionmaker(bind=engine)
 
@@ -35,7 +36,9 @@ TableBase = declarative_base()
 TableBase.id = Column(Integer, primary_key=True)
 TableBase.data = Column(LargeBinary)
 
+
 def pack_extras(self, kwargs):
+    """Packs extra keys into a k:v store to be put in a LargeBinary column."""
     extras = {}
     for key, value in kwargs.items():
         if hasattr(self, key):
@@ -47,6 +50,7 @@ def pack_extras(self, kwargs):
 
 
 def _validate_kwargs(kwargs, validation):
+    """Performs validation on kwargs to a table class"""
     for key, value in kwargs.items():
         if not validation[key](value):
             raise ValueError("Bad value for %s: %r." % (key, value))
@@ -56,49 +60,30 @@ class Accession(TableBase):
     __tablename__ = "accessions"
     accession_name = Column(String(255), nullable=False)
     species_id = Column(Integer, ForeignKey('species.id'), nullable=False)
-    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
-    has_seed = Column(Boolean, nullable=False, default=True)
-    date_collected = Column(DateTime, nullable=False)
-    latitude = Column(Float, nullable=False)
-    longitude = Column(Float, nullable=False)
-    altitude = Column(Float, nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id'))
+    has_seed = Column(Boolean, default=True)
+    date_collected = Column(DateTime)
+    latitude = Column(Float)
+    longitude = Column(Float)
+    altitude = Column(Float)
     locality_name = Column(String(255))
     population = Column(String(255))
     country = Column(String(45))
-    collection_trip_id = Column(Integer, ForeignKey('collection_trips.id'))
     maternal_lines = Column(Integer)
     storage_location = Column(Text)
     source = Column(Text)
     external_id = Column(String(45))
     notes = Column(Text)
     ala_id = Column(String(63))
-    first_parent_id = Column(Integer,
-            ForeignKey('accessions.id', post_update=True),
-            nullable=False)
+    first_parent_id = Column(Integer, ForeignKey('accessions.id'))
     first_parent_gender = Column(Integer)
-    second_parent_id = Column(Integer,
-            ForeignKey('accessions.id', post_update=True)
-            )
+    second_parent_id = Column(Integer, ForeignKey('accessions.id'))
     second_parent_gender = Column(Integer)
+    data = Column(LargeBinary)
 
-#    validation = {
-#            "accession_name": lambda v: v is not None and isinstance(v, str),
-#            "species_id": lambda v: isinstance(v, int),
-#            "anuid": lambda v: v is None,
-#            }
     def __init__(self, **kwargs):
         super(Accession, self).__init__()
         pack_extras(self, kwargs)
-
-
-class CollectionTrip(TableBase):
-    __tablename__ = "collection_trips"
-    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
-    start_date = Column(Date, nullable=False)
-    end_date = Column(Date, nullable=False)
-    location = Column(Text)
-    notes = Column(Text)
-    kml = Column(LargeBinary)
 
 
 class Experiment(TableBase):
@@ -107,6 +92,26 @@ class Experiment(TableBase):
     start_date = Column(Date, nullable=False)
     end_date = Column(Date, nullable=False)
     notes = Column(Text)
+
+    def __init__(self, **kwargs):
+        super(Experiment, self).__init__(**kwargs)
+        try:
+            if isinstance(kwargs["start_date"], str):
+                self.start_date = datetime.strptime(kwargs["start_date"],
+                        DATE_STR_FORMAT)
+            else:
+                self.start_date = kwargs["start_date"]
+        except KeyError:
+            pass
+        try:
+            if isinstance(kwargs["end_date"], str):
+                self.end_date = datetime.strptime(kwargs["end_date"],
+                        DATE_STR_FORMAT)
+            else:
+                self.end_date = kwargs["end_date"]
+        except KeyError:
+            pass
+
 
 
 class Plant(TableBase):
@@ -120,9 +125,10 @@ class Plant(TableBase):
     layout = Column(Integer)
     layout_type = Column(String(63))
     experiment_condition = Column(Text)
-#    experiment_condition_id = Column(Integer,
-#            ForeignKey('experiment_conditions.id'), nullable=False)
-
+    data = Column(LargeBinary)
+    def __init__(self, **kwargs):
+        super(Plant, self).__init__()
+        pack_extras(self, kwargs)
 
 class User(TableBase):
     __tablename__ = "users"
@@ -167,43 +173,6 @@ class Species(TableBase):
                     self.abbreviation = species_abbrev
                     break
         self.session.close()
-
-#class Protocol(TableBase):
-#    __tablename__ = "protocols"
-#    name = Column(String(45), unique=True, nullable=False)
-#    protocol = Column(Text, nullable=False)
-#    machine_instructions = Column(LargeBinary)
-#
-#
-#class ExperimentCondition(TableBase):
-#    __tablename__ = "experiment_conditions"
-#    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
-#    experiment_id = Column(Integer, ForeignKey('experiments.id'),
-#            nullable=False)
-#    notes = Column(Text)
-#
-#
-#class ExperimentConditionProtcol(TableBase):
-#    __tablename__ = "experiment_condition_protocols"
-#    experiment_condition_id = Column(Integer,
-#            ForeignKey('experiment_conditions.id'), nullable=False)
-#    ordinal = Column(Integer, nullable=False)
-#    protcol_id = Column(Integer, ForeignKey('protocols.id'), nullable=False)
-#    protcol_notes = Column(Text)
-#
-#
-#class ExperimentConditionPreset(TableBase):
-#    __tablename__ = "experiment_condition_presets"
-#    name = Column(String(45), index=True, nullable=False)
-#    description = Column(String(255), index=True)
-#    notes = Column(Text)
-#
-#class ExperimentConditionPresetProtcol(TableBase):
-#    __tablename__ = "experiment_condition_preset_protocols"
-#    experiment_condition_preset_id = Column(Integer,
-#            ForeignKey('experiment_condition_presets.id'), nullable=False)
-#    ordinal = Column(Integer, nullable=False)
-#    protcol_id = Column(Integer, ForeignKey('protocols.id'), nullable=False)
 
 
 def main(filename="traitcapture.db"):
